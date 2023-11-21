@@ -1,0 +1,24 @@
+{{- if eq .Values.provider "local" }}
+{{- range .Values.extra }}
+{{- if .service }}
+{{- $values := (set $ "extra" .) }}
+{{- $portName := default "http" .service.portName }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "application.extra.fullname" $values }}
+  labels:
+    {{- include "application.extra.labels" $values | nindent 4 }}
+spec:
+  type: {{ default "ClusterIP" .service.type }}
+  ports:
+    - port: {{ .service.port }}
+      targetPort: {{ $portName }}
+      protocol: TCP
+      name: {{ $portName }}
+  selector:
+    {{- include "application.extra.selectorLabels" $values | nindent 4 }}
+---
+{{- end }}
+{{- end }}
+{{- end }}

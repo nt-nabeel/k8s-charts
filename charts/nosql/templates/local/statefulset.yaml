@@ -1,0 +1,99 @@
+{{- if eq .Values.provider "local" }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "nosql.fullname" . }}
+  labels:
+    {{- include "nosql.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "nosql.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "nosql.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "nosql.serviceAccountName" . }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: MONGO_INITDB_ROOT_USERNAME
+              value: {{ .Values.auth.rootUsername }}
+            - name: MONGO_INITDB_ROOT_PASSWORD
+              value: {{ .Values.auth.rootPassword }}
+            - name: MONGO_INITDB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "nosql.fullname" . }}
+                  key: username
+            - name: MONGO_INITDB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "nosql.fullname" . }}
+                  key: password
+            - name: MONGO_INITDB_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "nosql.fullname" . }}
+                  key: database
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - /cmd/mongo-probe.sh
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 30
+            failureThreshold: 6
+            successThreshold: 1
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - /cmd/mongo-probe.sh
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 6
+            successThreshold: 1
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: nosql-data
+              mountPath: /data/db
+            - name: nosql-init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+            - name: nosql-probe
+              mountPath: /cmd
+              readOnly: true
+      volumes:
+        - name: nosql-data
+          persistentVolumeClaim:
+            claimName: {{ include "nosql.fullname" . }}
+        - name: nosql-init
+          configMap:
+            name: {{ include "nosql.fullname" . }}
+            items:
+              - key: mongo-init.js
+                path: mongo-init.js
+        - name: nosql-probe
+          configMap:
+            name: {{ include "nosql.fullname" . }}
+            defaultMode: 0777
+            items:
+              - key: mongo-probe.sh
+                path: mongo-probe.sh
+{{- end }}

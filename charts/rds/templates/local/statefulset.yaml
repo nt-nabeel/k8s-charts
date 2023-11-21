@@ -1,0 +1,82 @@
+{{- if eq .Values.provider "local" }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "rds.fullname" . }}
+  labels:
+    {{- include "rds.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "rds.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "rds.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "rds.serviceAccountName" . }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rds.fullname" . }}
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rds.fullname" . }}
+                  key: password
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "rds.fullname" . }}
+                  key: database
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  export PGPASSWORD=POSTGRES_PASSWORD
+
+                  if select="$(echo 'SELECT 1' | psql --username $POSTGRES_USER --dbname $POSTGRES_DB --quiet --no-align --tuples-only)" && [ "$select" = '1' ]; then
+                    exit 0
+                  fi
+
+                  exit 1
+            initialDelaySeconds: 15
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  export PGPASSWORD=POSTGRES_PASSWORD
+
+                  if select="$(echo 'SELECT 1' | psql --username $POSTGRES_USER --dbname $POSTGRES_DB --quiet --no-align --tuples-only)" && [ "$select" = '1' ]; then
+                    exit 0
+                  fi
+
+                  exit 1
+            initialDelaySeconds: 15
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: rds-data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: rds-data
+          persistentVolumeClaim:
+            claimName: {{ include "rds.fullname" . }}
+{{- end }}

@@ -1,0 +1,77 @@
+{{- if eq .Values.provider "local" }}
+{{- $release := .Release }}
+{{- range .Values.extra }}
+{{- $values := (set $ "extra" .) }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "application.extra.fullname" $values }}
+  labels:
+    {{- include "application.extra.labels" $values | nindent 4 }}
+spec:
+  {{- if or (not .autoscaling) (not .autoscaling.enabled) }}
+  replicas: {{ .replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "application.extra.selectorLabels" $values | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "application.extra.labels" $values | nindent 8 }}
+    spec:
+      {{- with .imagePullSecrets }}
+      imagePullSecrets:
+        {{- range . }}
+        - name: {{ .name }}
+        {{- end }}
+      {{- end }}
+      serviceAccountName: {{ include "application.serviceAccountName" $ }}
+      containers:
+        - name: {{ .name }}
+          image: "{{ .image.repository }}:{{ .image.tag }}"
+          imagePullPolicy: {{ .image.pullPolicy }}
+          {{- if or .env .useEnvFromMain }}
+          env:
+            {{- if .useEnvFromMain }}
+            {{ include "application.env" (dict "release" $release "env" $values.Values.env ) | nindent 12 }}
+            {{- end }}
+            {{- if .env }}
+            {{ include "application.env" (dict "release" $release "env" .env ) | nindent 12 }}
+            {{- end }}
+          {{- end }}
+          {{- with .command }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .args }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .service }}
+          ports:
+            - name: {{ default "http" .portName }}
+              containerPort: {{ .port }}
+              protocol: TCP
+          {{- end }}
+          {{- with .livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- toYaml .resources | nindent 12 }}
+          {{- with .volumeMounts }}
+          volumeMounts:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .volumes }}
+      volumes:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+{{- end }}
+{{- end }}

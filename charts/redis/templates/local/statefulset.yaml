@@ -1,0 +1,59 @@
+{{- if eq .Values.provider "local" }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "redis.fullname" . }}
+  labels:
+    {{- include "redis.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "redis.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "redis.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "redis.serviceAccountName" . }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  host="$(hostname -i || echo '127.0.0.1')"
+
+                  if ping="$(redis-cli -h "$host" ping)" && [ "$ping" = 'PONG' ]; then
+                    exit 0
+                  fi
+
+                  exit 1
+            initialDelaySeconds: 15
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  host="$(hostname -i || echo '127.0.0.1')"
+
+                  if ping="$(redis-cli -h "$host" ping)" && [ "$ping" = 'PONG' ]; then
+                    exit 0
+                  fi
+
+                  exit 1
+            initialDelaySeconds: 15
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+{{- end }}

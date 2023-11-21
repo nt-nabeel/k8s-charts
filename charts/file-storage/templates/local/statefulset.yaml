@@ -1,0 +1,82 @@
+{{- if eq .Values.provider "local" }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "file-storage.fullname" . }}
+  labels:
+    {{- include "file-storage.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "file-storage.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "file-storage.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "file-storage.serviceAccountName" . }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: MINIO_SCHEME
+              value: "http"
+            - name: MINIO_CONSOLE_PORT_NUMBER
+              value: "9090"
+            - name: MINIO_API_ROOT_ACCESS
+              value: "on"
+            - name: MINIO_BROWSER
+              value: "on"
+            - name: MINIO_SERVER_URL
+              value: "http://test-file-storage-0:9000"
+            - name: MINIO_BROWSER_REDIRECT_URL
+              value: "http://test-file-storage-0:9090"
+            - name: MINIO_VOLUMES
+              value: "/data"
+            - name: MINIO_FORCE_NEW_KEYS
+              value: "yes"
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "file-storage.fullname" . }}
+                  key: username
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "file-storage.fullname" . }}
+                  key: password
+            - name: MINIO_DEFAULT_BUCKETS
+              value: {{ .Values.auth.bucket }}
+          command:
+            - /bin/bash
+            - -c
+          args: 
+            - minio server /data --address test-file-storage-0:9000 --console-address test-file-storage-0:9090
+          ports:
+            - name: api
+              containerPort: 9000
+              protocol: TCP
+            - name: console
+              containerPort: 9090
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /minio/health/live
+              port: api
+          readinessProbe:
+            tcpSocket:
+              port: api
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: file-storage-data
+              mountPath: /data
+      volumes:
+        - name: file-storage-data
+          persistentVolumeClaim:
+            claimName: {{ include "file-storage.fullname" . }}
+{{- end }}

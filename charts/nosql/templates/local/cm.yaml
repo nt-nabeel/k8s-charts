@@ -1,0 +1,41 @@
+{{- if eq .Values.provider "local" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "nosql.fullname" . }}
+  labels: {{- include "nosql.labels" . | nindent 4 }}
+data:
+  mongo-init.js: |
+    db = db.getSiblingDB('admin');
+    db.auth(
+        process.env.MONGO_INITDB_ROOT_USERNAME,
+        process.env.MONGO_INITDB_ROOT_PASSWORD,
+    );
+    db = db.getSiblingDB(process.env.MONGO_INITDB_DATABASE);
+    db.createUser(
+      {
+        user: process.env.MONGO_INITDB_USERNAME,
+        pwd: process.env.MONGO_INITDB_PASSWORD,
+        roles: [
+          {
+            role: "readWrite",
+            db: process.env.MONGO_INITDB_DATABASE,
+          }
+        ]
+      }
+    );
+  mongo-probe.sh: |
+    #!/bin/sh
+
+    # Check the MongoDB connection
+    mongo_check=$(mongosh --eval "db.adminCommand('ping')" --quiet)
+
+    # Check the result of the MongoDB connection check
+    if [ "$mongo_check" = "{ ok: 1 }" ]; then
+      echo "MongoDB is up and running"
+      exit 0
+    else
+      echo "MongoDB is not available"
+      exit 1
+    fi
+{{- end }}

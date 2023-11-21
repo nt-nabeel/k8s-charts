@@ -1,0 +1,21 @@
+{{ if eq .Values.provider "local" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "rabbitmq.fullname" . }}
+  labels:
+    {{- include "rabbitmq.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+    - port: 15672
+      targetPort: management
+      protocol: TCP
+      name: management
+  selector:
+    {{- include "rabbitmq.selectorLabels" . | nindent 4 }}
+{{- end }}

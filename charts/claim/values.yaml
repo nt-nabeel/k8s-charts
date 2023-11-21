@@ -1,0 +1,243 @@
+# application:
+#   enabled: false
+#
+# rds:
+#   enabled: false
+#
+# nosql:
+#   enabled: false
+#
+# fileStorage:
+#   enabled: false
+#
+# rabbitmq:
+#   enabled: false
+#
+# redis:
+#   enabled: false
+
+application:
+  enabled: true
+
+  image:
+    repository: registry.gitlab.com/bl29/blankontech-internal-projects/performance-measurement
+    pullPolicy: Always
+    tag: "dev-151b4ec2"
+
+  imagePullSecrets:
+    - name: registry-secret
+      create: true
+
+  env:
+    - name: TAG_IMAGE
+      value: "dev-151b4ec2"
+    - name: CI_ENVIRONMENT_NAME
+      value: "development"
+    - name: USE_DOCKER
+      value: "false"
+    - name: IPYTHONDIR
+      value: "/app/.ipython"
+    - name: RABBITMQ_HOST
+      generatedFromService: true
+      value: rabbitmq
+    - name: RABBITMQ_USERNAME
+      generatedFromService: true
+      valueFrom:
+        secretKeyRef:
+          name: rabbitmq
+          key: username
+    - name: RABBITMQ_PASSWORD
+      generatedFromService: true
+      valueFrom:
+        secretKeyRef:
+          name: rabbitmq
+          key: password
+    - name: CELERY_BROKER_URL
+      value: "amqp://$(RABBITMQ_USERNAME):$(RABBITMQ_PASSWORD)@$(RABBITMQ_HOST):5672"
+    - name: CELERY_RESULT_BACKEND
+      value: "rpc://$(RABBITMQ_USERNAME):$(RABBITMQ_PASSWORD)@$(RABBITMQ_HOST):5672"
+    - name: CELERY_FLOWER_USER
+      value: "performance_measurement"
+    - name: CELERY_FLOWER_PASSWORD
+      value: "Kmzwa8awaa"
+    - name: DJANGO_ALLOWED_HOSTS
+      value: "*"
+    - name: DJANGO_CSRF_TRUSTED_ORIGINS
+      value: "https://dev-performance-measurement.blankontech.com"
+    - name: POSTGRES_HOST
+      generatedFromService: true
+      value: rds
+    - name: POSTGRES_PORT
+      value: "5432"
+    - name: POSTGRES_DB
+      generatedFromService: true
+      valueFrom:
+        secretKeyRef:
+          name: rds
+          key: database
+    - name: POSTGRES_USER
+      generatedFromService: true
+      valueFrom:
+        secretKeyRef:
+          name: rds
+          key: username
+    - name: POSTGRES_PASSWORD
+      generatedFromService: true
+      valueFrom:
+        secretKeyRef:
+          name: rds
+          key: password
+    - name: SCHEDULE_RUN_DAILY
+      value: "05:00:00,23:00:00"
+    - name: SCHEDULE_RUN_WEEKLY
+      value: "1"
+    - name: SCHEDULE_RUN_MONTHLY
+      value: "1"
+    - name: SCHEDULE_RUN_YEARLY
+      value: "1"
+    - name: SLACK_API_URL
+      value: "https://slack.com/api/views.open"
+    - name: SLACK_APP_TOKEN
+      value: "xapp-1-A05BQKCPYV7-5488330804979-e7a35da45fb3c7f15be29f8f36d4a23089bc83aae8f82a7f5eedd9f19227bbf8"
+    - name: SLACK_BOT_TOKEN
+      value: "xoxb-5385301141138-5386296991170-6TjNnxPdfZr7wF7JY65z7Oby"
+    - name: SLACK_CLIENT_ID
+      value: "5.38530114113854e+12"
+    - name: SLACK_CLIENT_SECRET
+      value: "d80e681be0b422ee425069285c93402f"
+    - name: OTEL_K8S_NODE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: spec.nodeName
+    - name: OTEL_K8S_NAMESPACE
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.namespace
+    - name: OTEL_SERVICE_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.labels['app.kubernetes.io/instance']
+    - name: OTEL_K8S_POD_UID
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.uid
+    - name: OTEL_K8S_POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: OTEL_RESOURCE_ATTRIBUTES
+      value: service.name=$(OTEL_SERVICE_NAME),service.instance.id=$(OTEL_K8S_POD_UID),service.namespace=$(OTEL_K8S_NAMESPACE),k8s.namespace.name=$(OTEL_K8S_NAMESPACE),k8s.node.name=$(OTEL_K8S_NODE_NAME),k8s.pod.name=$(OTEL_K8S_POD_NAME)
+    - name: OTEL_EXPORTER_OTLP_ENDPOINT
+      value: http://sdc-team-gitops-analityc-opentelemetry-collector.ci-cd.svc.cluster.local:4317
+    - name: OTEL_TRACES_EXPORTER
+      value: "otlp"
+    - name: OTEL_METRICS_EXPORTER
+      value: "otlp"
+
+  command:
+    - sh
+
+  args:
+    - -c
+    - /start
+
+  livenessProbe:
+    httpGet:
+      path: /admin
+      port: http
+
+  readinessProbe:
+    httpGet:
+      path: /admin
+      port: http
+
+  service:
+    port: 8000
+
+  ingress:
+    enabled: true
+    hosts:
+      - host: dev-performance-measurement.blankontech.com
+        paths:
+          - path: /
+            pathType: ImplementationSpecific
+
+  extra:
+    - name: celery-beat
+      image:
+        repository: registry.gitlab.com/bl29/blankontech-internal-projects/performance-measurement
+        pullPolicy: Always
+        tag: "dev-151b4ec2"
+      imagePullSecrets:
+        - name: registry-secret
+      useEnvFromMain: true
+      command:
+        - sh
+      args:
+        - -c
+        - /start-celerybeat
+    - name: celery-worker
+      image:
+        repository: registry.gitlab.com/bl29/blankontech-internal-projects/performance-measurement
+        pullPolicy: Always
+        tag: "dev-151b4ec2"
+      imagePullSecrets:
+        - name: registry-secret
+      useEnvFromMain: true
+      command:
+        - sh
+      args:
+        - -c
+        - /start-celeryworker
+    - name: celery-flower
+      image:
+        repository: registry.gitlab.com/bl29/blankontech-internal-projects/performance-measurement
+        pullPolicy: Always
+        tag: "dev-151b4ec2"
+      imagePullSecrets:
+        - name: registry-secret
+      useEnvFromMain: true
+      command:
+        - sh
+      args:
+        - -c
+        - /start-flower
+      service:
+        port: 5555
+        portName: http
+      ingress:
+        enabled: true
+        className: nginx
+        hosts:
+          - host: dev-performance-measurement-flower.blankontech.com
+            paths:
+              - path: /
+                pathType: ImplementationSpecific
+      autoscaling:
+        enabled: true
+        minReplicas: 1
+        maxReplicas: 5
+        targetCPUUtilizationPercentage: 80
+        targetMemoryUtilizationPercentage: 80
+
+rds:
+  enabled: true
+  auth:
+    username: performance-measurement
+    password: Kmzwa8awaa
+    database: performance-measurement
+
+nosql:
+  enabled: false
+
+fileStorage:
+  enabled: false
+
+rabbitmq:
+  enabled: true
+  auth:
+    username: performance-measurement
+    password: Kmzwa8awaa
+
+redis:
+  enabled: false

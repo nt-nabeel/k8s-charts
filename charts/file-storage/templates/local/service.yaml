@@ -1,0 +1,21 @@
+{{ if eq .Values.provider "local" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "file-storage.fullname" . }}
+  labels:
+    {{- include "file-storage.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: 9000
+      targetPort: api
+      protocol: TCP
+      name: api
+    - port: 9090
+      targetPort: console
+      protocol: TCP
+      name: console
+  selector:
+    {{- include "file-storage.selectorLabels" . | nindent 4 }}
+{{- end }}

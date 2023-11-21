@@ -1,0 +1,18 @@
+{{- if eq .Values.provider "local" }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "nosql.fullname" . }}
+  labels:
+    {{- include "nosql.labels" . | nindent 4 }}
+spec:
+  storageClassName: hostpath
+  volumeName: {{ include "nosql.fullname" . }}
+  {{- with .Values.persistence.accessModes }}
+  accessModes:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.size }}
+{{- end }}
